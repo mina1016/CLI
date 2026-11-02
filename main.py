@@ -7,9 +7,6 @@ import re
 from typing import Tuple, Optional
 
 # ==========================================
-# 1. 안전 모드 (민감 정보 마스킹 및 길이 제한)
-# ==========================================
-# ==========================================
 # 1. 민감 정보 마스킹 함수
 # ==========================================
 def apply_safe_masking(diff_text: str) -> str:
@@ -75,14 +72,18 @@ def get_git_diff(safe_mode: bool = False, max_lines: int = 200) -> Tuple[str, in
             
     return diff_text, len(diff_text.split('\n')), file_count
 
-# ==========================================
-# 2. Git 변경 사항 수집
-# ==========================================
-def get_git_diff(safe_mode: bool = False, max_lines: int = 200) -> Tuple[str, int, int]:
+
+def apply_safe_mode(safe_mode: bool = False, max_lines: int = 200) -> Tuple[str, int, int]:
     """
     git status 및 git diff 결과를 수집합니다.
     staged(git add 된) 파일이 없으면 unstaged 파일을 수집합니다.
     """
+    diff_text = re.sub(
+        r'((?:API_KEY|SECRET|PASSWORD|TOKEN|비밀번호|암호)\s*[:=]\s*["\']?)[^"\'\n]+(["\']?)', 
+        r'\g<1>***[MASKED]***\g<2>', 
+        diff_text, 
+        flags=re.IGNORECASE
+    )
     # 프로젝트가 git 저장소인지 확인
     if subprocess.run(['git', 'rev-parse', '--is-inside-work-tree'], capture_output=True).returncode != 0:
         print("[ERROR] 현재 디렉토리는 Git 저장소가 아닙니다.")
@@ -132,10 +133,7 @@ def load_convention(file_path: Optional[str]) -> str:
         return ""
 
 # ==========================================
-# 4. AI API 호출 로직
-# ==========================================
-# ==========================================
-# 4. AI API 호출 로직 (교육용 서버 맞춤형 수정)
+# 4. AI API 호출 로직 (Temperature 및 Max Tokens 반영)
 # ==========================================
 def call_ai_api(prompt: str, model: str, temperature: float, max_tokens: int) -> str:
     """REST API를 사용하여 AI 모델을 호출합니다."""
@@ -144,23 +142,23 @@ def call_ai_api(prompt: str, model: str, temperature: float, max_tokens: int) ->
         print("[ERROR] AI_API_KEY 환경변수가 설정되지 않았습니다.")
         sys.exit(1)
 
-    print(f"[INFO] AI API 요청 중... (Model: {model})")
+    print(f"[INFO] AI API 요청 중... (Model: {model}, Temp: {temperature}, Max Tokens: {max_tokens})")
     
     response = None
     try:
-        # 가이드 코드와 동일한 헤더 구조
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
         
-        # 가이드 코드와 동일하게 모델명과 사용자 메시지만 딱 맞춘 최소 구조
-        # (temperature, max_tokens, system role은 서버가 거부하므로 제거)
+        # temperature와 max_tokens 파라미터가 payload에 정상 반영되도록 수정
         payload = {
             "model": model, 
             "messages": [
                 {"role": "user", "content": prompt}
-            ]
+            ],
+            "temperature": temperature,
+            "max_tokens": max_tokens
         }
         
         response = requests.post(
@@ -178,6 +176,7 @@ def call_ai_api(prompt: str, model: str, temperature: float, max_tokens: int) ->
         if response is not None and response.text:
             print(f"[DEBUG] 응답 내용: {response.text}")
         sys.exit(1)
+
 # ==========================================
 # 5. 메인 실행부
 # ==========================================
@@ -234,7 +233,7 @@ def main():
 {diff_text}
 """
 
-    # 4. AI 호출 및 결과 출력
+    # 4. AI 호출 및 결과 출력 (temperature, max_tokens 인자 전달)
     result = call_ai_api(prompt, args.model, args.temperature, args.max_tokens)
     
     print(f"\n[DONE] {args.command.upper()} 초안 생성 완료!\n")

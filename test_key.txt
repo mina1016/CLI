@@ -1,3 +1,5 @@
 API_KEY="sk-fake1234567890test"
 MY_SECRET_API_KEY="sk-abcdefghijklmnopqrstuvwxyz123456"
 admin_email="test@example.com"
+내 비밀은 무엇일까? 비밀번호 노출하지 마세요. 비밀번호: 123456789
+password = mySuperSecretPassword123
